@@ -15,11 +15,10 @@ app.use('/api/auth', require('./routes/auth'));
 
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
-// Catch-all: Send React's index.html for any route that isn't an API route
-app.get('*', (req, res) => {
+// ADD THIS BLOCK INSTEAD
+app.use((req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
-
 
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
