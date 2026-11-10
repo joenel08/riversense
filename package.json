@@ -1,0 +1,14 @@
+{
+  "devDependencies": {
+    "concurrently": "^10.0.5"
+  },
+  "scripts": {
+    "start:backend": "npm start --prefix backend",
+    "start:frontend": "npm run dev --prefix frontend",
+    "start": "concurrently \"npm run start:backend\" \"npm run start:frontend\""
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "jsonwebtoken": "^9.0.3"
+  }
+}
