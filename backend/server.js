@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -11,6 +12,14 @@ app.use(express.json());
 app.use('/api/sensors', require('./routes/sensors'));
 app.use('/api/readings', require('./routes/readings'));
 app.use('/api/auth', require('./routes/auth'));
+
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
+
+// Catch-all: Send React's index.html for any route that isn't an API route
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+});
+
 
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
