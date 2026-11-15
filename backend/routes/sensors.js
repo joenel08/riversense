@@ -24,18 +24,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// POST (Add) a new sensor
-router.post('/', async (req, res) => {
-  try {
-    const { name, type, latitude, longitude } = req.body;
-    const newSensor = new Sensor({ name, type, latitude, longitude });
-    const savedSensor = await newSensor.save();
-    res.status(201).json(savedSensor);
-  } catch (err) {
-    res.status(400).json({ error: 'Error creating sensor' });
-  }
-});
-// backend/routes/sensors.js
+
 
 // POST (Add) a new sensor
 router.post('/', async (req, res) => {
