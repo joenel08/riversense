@@ -66,11 +66,11 @@ const AdminDashboard = () => {
   };
 
   const pH_COLORS = ['#ff0000', '#ff4d00', '#ff9900', '#ffcc00', '#ffff00', '#b8e600', '#80e500', '#00cc44', '#00b3b3', '#3399ff', '#3333ff', '#6600cc', '#9900cc', '#cc66cc', '#ff66ff'];
-  const doColors = generateGradientColors('#ffff00', '#00ff00', 10);
+  
+  // --- UPDATED COLORS (ORP instead of DO) ---
+  const orpColors = generateGradientColors('#ff0000', '#00ff00', 10); 
   const turbidityColors = generateGradientColors('#ff0000', '#0000ff', 10);
   const tempColors = generateGradientColors('#0000ff', '#ff0000', 5);
-  
-  // --- ADDED TDS & EC COLORS ---
   const tdsColors = generateGradientColors('#00ff00', '#ff0000', 10); 
   const ecColors = generateGradientColors('#00ff00', '#ff0000', 10);
 
@@ -194,10 +194,9 @@ const AdminDashboard = () => {
     return (sum / filteredReadings.length);
   };
 
-  // --- UNIVERSAL PARAMETERS (ACCEPTS EITHER WATER OR AIR OR MULTIPARAMETER) ---
+  // --- UNIVERSAL PARAMETERS ---
   const getParameters = () => {
-    // Return all possible parameters. If a sensor doesn't send one, it will display '--'.
-    return ['ph', 'turbidity', 'oxygen', 'temperature', 'tds', 'ec', 'co2', 'no2'];
+    return ['ph', 'turbidity', 'orp', 'temperature', 'tds', 'ec', 'co2', 'no2'];
   };
 
   // --- EXPORT CSV FUNCTION ---
@@ -209,7 +208,7 @@ const AdminDashboard = () => {
 
     const rows = filteredReadings.map(r => {
       const row = [format(new Date(r.timestamp), 'yyyy-MM-dd HH:mm:ss')];
-      params.forEach(p => row.push(r[p] !== undefined ? r[p] : ''));
+      params.forEach(p => row.push(r[p] !== undefined && r[p] !== null ? r[p] : ''));
       return row.join(',');
     });
 
@@ -277,21 +276,18 @@ const AdminDashboard = () => {
   };
 
   const renderParameterVisual = (paramKey, value) => {
-    // If value is undefined/null, skip it entirely so we don't render empty bars
     if (value === null || value === undefined) return null; 
 
     if (paramKey === 'ph') return renderPHScale(value);
-    if (paramKey === 'oxygen') return renderScaleBar(value, 0, 10, 10, doColors, 'mg/L', 'Dissolved Oxygen');
+    if (paramKey === 'orp') return renderScaleBar(value, 0, 600, 10, orpColors, 'mV', 'ORP');
     if (paramKey === 'turbidity') return renderScaleBar(value, 0, 500, 10, turbidityColors, 'NTU', 'Turbidity');
     if (paramKey === 'temperature') return renderScaleBar(value, 0, 25, 5, tempColors, '°C', 'Temperature');
-    
-    // --- ADDED TDS & EC RENDERERS ---
     if (paramKey === 'tds') return renderScaleBar(value, 0, 1000, 10, tdsColors, 'ppm', 'Total Dissolved Solids');
     if (paramKey === 'ec') return renderScaleBar(value, 0, 2000, 10, ecColors, 'µS/cm', 'Electrical Conductivity');
 
     const config = paramConfig[paramKey];
     if (!config) return null;
-    let displayValue = value !== null ? value.toFixed(1) : '--';
+    let displayValue = value.toFixed(1);
     return (
       <div style={{ background: 'white', border: `2px solid ${config.color}`, borderRadius: '12px', padding: '16px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', minHeight: '80px' }}>
         <span style={{ fontSize: '14px', fontWeight: 'bold', color: '#555', textAlign: 'center' }}>{config.label}</span>
@@ -506,10 +502,11 @@ const AdminDashboard = () => {
                             {s.type === 'water' ? <Droplets size={12} /> : <Wind size={12} />} {s.type.toUpperCase()}
                           </span>
                         </td>
+                        {/* --- UPDATED TELEMETRY DISPLAY (ORP instead of O2) --- */}
                         <td style={{ padding: '12px', color: '#444', fontSize: '12px' }}>
                           {r ? (
                             <div>
-                              <div>pH: <b>{r.ph || '--'}</b> | Turb: <b>{r.turbidity || '--'}</b> | Temp: <b>{r.temperature || '--'}</b></div>
+                              <div>pH: <b>{r.ph || '--'}</b> | Turb: <b>{r.turbidity || '--'}</b> | ORP: <b>{r.orp || '--'}</b></div>
                               <div>TDS: <b>{r.tds || '--'}</b> | EC: <b>{r.ec || '--'}</b></div>
                               <div>CO₂: <b>{r.co2 || '--'}</b> | NO₂: <b>{r.no2 || '--'}</b></div>
                             </div>

@@ -35,7 +35,6 @@ const SensorDetail = () => {
   // --- STATE ---
   const [sensor, setSensor] = useState(null);
   const [readings, setReadings] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('24h');
   const [openAccordion, setOpenAccordion] = useState('1 Hour');
   
@@ -73,11 +72,10 @@ const SensorDetail = () => {
     '#3333ff', '#6600cc', '#9900cc', '#cc66cc', '#ff66ff'
   ];
 
-  const doColors = generateGradientColors('#ffff00', '#00ff00', 10);
+  // --- UPDATED COLORS FOR ORP ---
+  const orpColors = generateGradientColors('#ff0000', '#00ff00', 10); 
   const turbidityColors = generateGradientColors('#ff0000', '#0000ff', 10);
   const tempColors = generateGradientColors('#0000ff', '#ff0000', 5);
-  
-  // --- ADDED TDS & EC COLORS ---
   const tdsColors = generateGradientColors('#00ff00', '#ff0000', 10); 
   const ecColors = generateGradientColors('#00ff00', '#ff0000', 10);
 
@@ -86,12 +84,10 @@ const SensorDetail = () => {
     no2: { label: 'NO₂', color: '#e84393', unit: 'ppb' },
   };
 
-  // --- API FETCH (WITH SILENT REFRESH) ---
+  // --- API FETCH (SILENT REFRESH) ---
   useEffect(() => {
-    const fetchData = async (isInitial = false) => {
+    const fetchData = async () => {
       try {
-        if (isInitial) setLoading(true); 
-        
         const cleanSensorId = sensorId.trim();
 
         const sensorRes = await API.get(`/sensors/${cleanSensorId}`);
@@ -101,15 +97,14 @@ const SensorDetail = () => {
         setReadings(readingsRes.data);
       } catch (err) {
         console.error('Error fetching sensor data:', err);
-      } finally {
-        if (isInitial) setLoading(false); 
       }
     };
     
-    fetchData(true); // Initial fetch
+    // Initial fetch
+    fetchData(); 
     
     // Silent refresh every 10 seconds
-    const interval = setInterval(() => fetchData(false), 10000); 
+    const interval = setInterval(fetchData, 10000); 
     
     return () => clearInterval(interval);
   }, [sensorId]);
@@ -122,7 +117,6 @@ const SensorDetail = () => {
     if (!map) return alert("Map is still loading, please wait a moment.");
     
     setIsSearching(true);
-    console.log("Searching for:", searchQuery);
 
     try {
       const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`);
@@ -130,17 +124,16 @@ const SensorDetail = () => {
       if (!response.ok) throw new Error(`API Error: ${response.status}`);
 
       const data = await response.json();
-      console.log("Search Results:", data);
 
       if (data && data.length > 0) {
         const { lat, lon } = data[0];
         map.flyTo([parseFloat(lat), parseFloat(lon)], 15, { duration: 2 });
       } else {
-        alert("Location not found. Please try a different search (e.g. 'Manila' or 'Tuguegarao').");
+        alert("Location not found. Please try a different search.");
       }
     } catch (error) {
       console.error("Error searching location:", error);
-      alert("Failed to search location. Please check your internet connection or try again later.");
+      alert("Failed to search location. Please check your internet connection.");
     } finally {
       setIsSearching(false);
     }
@@ -160,7 +153,6 @@ const SensorDetail = () => {
   const getAverageValue = (paramKey) => {
     if (filteredReadings.length === 0) return null;
     
-    // Check if at least one reading actually has this parameter
     const hasParam = filteredReadings.some(r => r[paramKey] !== undefined && r[paramKey] !== null);
     if (!hasParam) return null;
     
@@ -168,9 +160,9 @@ const SensorDetail = () => {
     return (sum / filteredReadings.length);
   };
 
-  // --- UNIVERSAL PARAMETERS (ACCEPTS WATER, AIR, OR MULTIPARAMETER) ---
+  // --- UPDATED PARAMETERS (OXYGEN -> ORP) ---
   const getParameters = () => {
-    return ['ph', 'turbidity', 'oxygen', 'temperature', 'tds', 'ec', 'co2', 'no2'];
+    return ['ph', 'turbidity', 'orp', 'temperature', 'tds', 'ec', 'co2', 'no2'];
   };
 
   const toggleAccordion = (title) => {
@@ -285,15 +277,12 @@ const SensorDetail = () => {
   };
 
   const renderParameterVisual = (paramKey, value) => {
-    // If value is null/undefined, skip rendering entirely to keep the UI clean
     if (value === null || value === undefined) return null; 
 
     if (paramKey === 'ph') return renderPHScale(value);
-    if (paramKey === 'oxygen') return renderScaleBar(value, 0, 10, 10, doColors, 'mg/L', 'Dissolved Oxygen');
+    if (paramKey === 'orp') return renderScaleBar(value, 0, 600, 10, orpColors, 'mV', 'ORP');
     if (paramKey === 'turbidity') return renderScaleBar(value, 0, 500, 10, turbidityColors, 'NTU', 'Turbidity');
     if (paramKey === 'temperature') return renderScaleBar(value, 0, 25, 5, tempColors, '°C', 'Temperature');
-    
-    // --- ADDED TDS & EC RENDERERS ---
     if (paramKey === 'tds') return renderScaleBar(value, 0, 1000, 10, tdsColors, 'ppm', 'Total Dissolved Solids');
     if (paramKey === 'ec') return renderScaleBar(value, 0, 2000, 10, ecColors, 'µS/cm', 'Electrical Conductivity');
 
@@ -331,8 +320,10 @@ const SensorDetail = () => {
     }
   }, [isMobile]);
 
-  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><h2>Loading...</h2></div>;
-  if (!sensor) return <div style={{ padding: 20 }}><h2>Sensor not found</h2><button onClick={() => navigate('/')}>Back</button></div>;
+  // --- FIXED LOADING CONDITION ---
+  // Only show this if we haven't fetched the sensor data yet.
+  // Once the sensor is fetched, it will never show again, even during silent refreshes.
+  if (!sensor) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><h2>Loading...</h2></div>;
 
   // --- DYNAMIC STYLES ---
   const containerStyle = {
