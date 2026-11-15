@@ -5,8 +5,33 @@ import { subHours, format, isWithinInterval, parseISO } from 'date-fns';
 import {
   PlusCircle, Edit2, Trash2, Printer, LogOut, MapPin, Activity,
   Droplets, Wind, AlertTriangle, CheckCircle, X, Droplet, ChevronDown, ChevronUp, BarChart2,
-  Search, Download, Database
+  Search, Download, Database, LineChart
 } from 'lucide-react';
+
+// --- IMPORT CHART.JS COMPONENTS ---
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+} from 'chart.js';
+import { Line } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+);
 
 // Custom hook to detect mobile viewport
 const useMediaQuery = (query) => {
@@ -43,6 +68,9 @@ const AdminDashboard = () => {
   const [useCustomDate, setUseCustomDate] = useState(false);
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+  
+  // --- TAB STATE (Averages vs Trends) ---
+  const [modalTab, setModalTab] = useState('averages'); 
 
   const navigate = useNavigate();
   const timeRangeOptions = { '1h': 1, '3h': 3, '6h': 6, '12h': 12, '24h': 24 };
@@ -66,8 +94,6 @@ const AdminDashboard = () => {
   };
 
   const pH_COLORS = ['#ff0000', '#ff4d00', '#ff9900', '#ffcc00', '#ffff00', '#b8e600', '#80e500', '#00cc44', '#00b3b3', '#3399ff', '#3333ff', '#6600cc', '#9900cc', '#cc66cc', '#ff66ff'];
-  
-  // --- UPDATED COLORS (ORP instead of DO) ---
   const orpColors = generateGradientColors('#ff0000', '#00ff00', 10); 
   const turbidityColors = generateGradientColors('#ff0000', '#0000ff', 10);
   const tempColors = generateGradientColors('#0000ff', '#ff0000', 5);
@@ -155,6 +181,7 @@ const AdminDashboard = () => {
     setOpenAccordion('1 Hour');
     setCustomStart('');
     setCustomEnd('');
+    setModalTab('averages'); // Reset to Averages tab
 
     try {
       const res = await API.get(`/readings/sensor/${sensor._id}`);
@@ -296,6 +323,37 @@ const AdminDashboard = () => {
     );
   };
 
+  // --- CHART RENDERER FOR TRENDS ---
+  const getChartData = (paramKey) => {
+    const labels = filteredReadings.map(r => format(new Date(r.timestamp), 'HH:mm'));
+    const data = filteredReadings.map(r => r[paramKey]);
+    
+    let borderColor = '#0056b3';
+    let bgColor = 'rgba(0, 86, 179, 0.1)';
+    
+    if (paramKey === 'ph') { borderColor = '#FF6B6B'; bgColor = 'rgba(255, 107, 107, 0.1)'; }
+    else if (paramKey === 'turbidity') { borderColor = '#4ECDC4'; bgColor = 'rgba(78, 205, 196, 0.1)'; }
+    else if (paramKey === 'orp') { borderColor = '#45B7D1'; bgColor = 'rgba(69, 183, 209, 0.1)'; }
+    else if (paramKey === 'temperature') { borderColor = '#F9CA24'; bgColor = 'rgba(249, 202, 36, 0.1)'; }
+    else if (paramKey === 'tds') { borderColor = '#A29BFE'; bgColor = 'rgba(162, 155, 254, 0.1)'; }
+    else if (paramKey === 'ec') { borderColor = '#FDCB6E'; bgColor = 'rgba(253, 203, 110, 0.1)'; }
+    else if (paramKey === 'co2') { borderColor = '#9b59b6'; bgColor = 'rgba(155, 89, 182, 0.1)'; }
+    else if (paramKey === 'no2') { borderColor = '#e84393'; bgColor = 'rgba(232, 67, 147, 0.1)'; }
+
+    return {
+      labels,
+      datasets: [{
+        label: paramKey.toUpperCase(),
+        data,
+        borderColor,
+        backgroundColor: bgColor,
+        tension: 0.3,
+        fill: true,
+        pointRadius: 2,
+      }]
+    };
+  };
+
   // --- STATUS BADGES ---
   const getAlertBadge = (reading) => {
     if (!reading) return <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', background: '#eee', color: '#666' }}>No Data</span>;
@@ -417,7 +475,7 @@ const AdminDashboard = () => {
                 <select value={formData.type} onChange={e => setFormData({ ...formData, type: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc', boxSizing: 'border-box', background: 'white' }}>
                   <option value="water">Water Quality Monitoring</option>
                   <option value="air">Air Quality Monitoring</option>
-                  <option value="multiparameter">Multiparameter (Water & Air)</option>
+                  {/* <option value="multiparameter">Multiparameter (Water & Air)</option> */}
                 </select>
               </div>
 
@@ -502,7 +560,6 @@ const AdminDashboard = () => {
                             {s.type === 'water' ? <Droplets size={12} /> : <Wind size={12} />} {s.type.toUpperCase()}
                           </span>
                         </td>
-                        {/* --- UPDATED TELEMETRY DISPLAY (ORP instead of O2) --- */}
                         <td style={{ padding: '12px', color: '#444', fontSize: '12px' }}>
                           {r ? (
                             <div>
@@ -542,7 +599,7 @@ const AdminDashboard = () => {
       {/* --- ADVANCED REPORT MODAL --- */}
       {viewingSensor && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: isMobile ? '10px' : '20px' }}>
-          <div className="printable-area print-card" style={{ background: 'white', width: '100%', maxWidth: '600px', maxHeight: '90vh', borderRadius: '8px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 50px rgba(0,0,0,0.3)', border: '1px solid #ccc', boxSizing: 'border-box' }}>
+          <div className="printable-area print-card" style={{ background: 'white', width: '100%', maxWidth: '800px', maxHeight: '90vh', borderRadius: '8px', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 50px rgba(0,0,0,0.3)', border: '1px solid #ccc', boxSizing: 'border-box' }}>
             
             {/* Modal Header */}
             <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', padding: '16px', borderBottom: '2px solid #0056b3', background: '#f4f7f6', gap: '10px' }}>
@@ -558,7 +615,7 @@ const AdminDashboard = () => {
               </button>
             </div>
 
-            {/* Filtering Section */}
+            {/* Filtering & Tabs Section */}
             <div className="no-print" style={{ padding: '16px', background: '#fff', borderBottom: '1px solid #eee' }}>
               <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '16px', alignItems: isMobile ? 'stretch' : 'center', marginBottom: '12px' }}>
                 <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -586,6 +643,22 @@ const AdminDashboard = () => {
                   Using preset ranges below.
                 </div>
               )}
+
+              {/* --- TABS FOR VIEW SWITCHING --- */}
+              <div style={{ display: 'flex', borderBottom: '1px solid #ddd', marginTop: '16px' }}>
+                <button 
+                  onClick={() => setModalTab('averages')} 
+                  style={{ padding: '10px 20px', background: 'transparent', border: 'none', borderBottom: modalTab === 'averages' ? '3px solid #0056b3' : '3px solid transparent', color: modalTab === 'averages' ? '#0056b3' : '#666', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <BarChart2 size={16} /> Average Scales
+                </button>
+                <button 
+                  onClick={() => setModalTab('trends')} 
+                  style={{ padding: '10px 20px', background: 'transparent', border: 'none', borderBottom: modalTab === 'trends' ? '3px solid #0056b3' : '3px solid transparent', color: modalTab === 'trends' ? '#0056b3' : '#666', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  <LineChart size={16} /> Trend Graphs
+                </button>
+              </div>
             </div>
 
             {/* Modal Body (Scrollable) */}
@@ -593,55 +666,106 @@ const AdminDashboard = () => {
               {loadingData ? (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}><Activity className="animate-spin" style={{ margin: '0 auto' }} /> Loading...</div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {!useCustomDate && ['1 Hour', '3 Hours', '6 Hours', '12 Hours', '24 Hours'].map((timeFrame) => {
-                    const isOpen = openAccordion === timeFrame;
-                    const mappedTime = timeFrame.replace(' Hours', 'h').replace(' Hour', 'h');
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  
+                  {/* --- TAB 1: AVERAGES (EXISTING ACCORDIONS) --- */}
+                  {modalTab === 'averages' && (
+                    <>
+                      {!useCustomDate && ['1 Hour', '3 Hours', '6 Hours', '12 Hours', '24 Hours'].map((timeFrame) => {
+                        const isOpen = openAccordion === timeFrame;
+                        const mappedTime = timeFrame.replace(' Hours', 'h').replace(' Hour', 'h');
 
-                    return (
-                      <div key={timeFrame} style={{ border: '1px solid #ddd', borderRadius: '4px', overflow: 'hidden', background: 'white', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
-                        <div onClick={() => { setOpenAccordion(isOpen ? null : timeFrame); setTimeRange(mappedTime); }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', background: isOpen ? '#f4f7f6' : 'white' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <div style={{ width: '32px', height: '32px', background: '#0667f5', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
-                              <Droplet size={18} />
+                        return (
+                          <div key={timeFrame} style={{ border: '1px solid #ddd', borderRadius: '4px', overflow: 'hidden', background: 'white', boxShadow: '0 1px 2px rgba(0,0,0,0.02)' }}>
+                            <div onClick={() => { setOpenAccordion(isOpen ? null : timeFrame); setTimeRange(mappedTime); }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', background: isOpen ? '#f4f7f6' : 'white' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <div style={{ width: '32px', height: '32px', background: '#0667f5', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+                                  <Droplet size={18} />
+                                </div>
+                                <span style={{ fontWeight: 'bold', fontSize: '14px', color: '#333' }}>{timeFrame} Avg</span>
+                              </div>
+                              {isOpen ? <ChevronUp size={18} color="#666" /> : <ChevronDown size={18} color="#666" />}
                             </div>
-                            <span style={{ fontWeight: 'bold', fontSize: '14px', color: '#333' }}>{timeFrame} Avg</span>
-                          </div>
-                          {isOpen ? <ChevronUp size={18} color="#666" /> : <ChevronDown size={18} color="#666" />}
-                        </div>
 
-                        {isOpen && (
-                          <div style={{ padding: '0 16px 16px 16px', borderTop: '1px solid #eee' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
+                            {isOpen && (
+                              <div style={{ padding: '0 16px 16px 16px', borderTop: '1px solid #eee' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
+                                  {getParameters().map(paramKey => {
+                                    const avgValue = getAverageValue(paramKey);
+                                    return renderParameterVisual(paramKey, avgValue);
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {/* Display Custom Range Data */}
+                      {useCustomDate && (
+                        <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: '4px', padding: '16px' }}>
+                          <h3 style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#0056b3', borderBottom: '1px solid #eee', paddingBottom: '8px' }}>
+                            Averages for Selected Range
+                          </h3>
+                          {filteredReadings.length === 0 ? (
+                            <div style={{ color: '#d32f2f', fontSize: '13px', textAlign: 'center', padding: '20px' }}>No data found.</div>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                               {getParameters().map(paramKey => {
                                 const avgValue = getAverageValue(paramKey);
                                 return renderParameterVisual(paramKey, avgValue);
                               })}
                             </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
 
-                  {/* Display Custom Range Data */}
-                  {useCustomDate && (
-                    <div style={{ background: 'white', border: '1px solid #ddd', borderRadius: '4px', padding: '16px' }}>
-                      <h3 style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#0056b3', borderBottom: '1px solid #eee', paddingBottom: '8px' }}>
-                        Averages for Selected Range
-                      </h3>
-                      {filteredReadings.length === 0 ? (
-                        <div style={{ color: '#d32f2f', fontSize: '13px', textAlign: 'center', padding: '20px' }}>No data found.</div>
-                      ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                          {getParameters().map(paramKey => {
-                            const avgValue = getAverageValue(paramKey);
-                            return renderParameterVisual(paramKey, avgValue);
-                          })}
+                  {/* --- TAB 2: TREND GRAPHS (NEW) --- */}
+                  {modalTab === 'trends' && (
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '16px' }}>
+                      {getParameters().map(paramKey => {
+                        // Only render chart if there is data for this parameter
+                        const hasData = filteredReadings.some(r => r[paramKey] !== undefined && r[paramKey] !== null);
+                        if (!hasData) return null;
+
+                        return (
+                          <div key={paramKey} style={{ background: 'white', border: '1px solid #ddd', borderRadius: '8px', padding: '16px', height: '220px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
+                            <h4 style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#333', textAlign: 'center', fontWeight: 'bold' }}>
+                              {paramKey === 'ph' ? 'pH Level' : 
+                               paramKey === 'orp' ? 'ORP (mV)' : 
+                               paramKey === 'turbidity' ? 'Turbidity (NTU)' :
+                               paramKey === 'temperature' ? 'Temperature (°C)' :
+                               paramKey === 'tds' ? 'TDS (ppm)' :
+                               paramKey === 'ec' ? 'EC (µS/cm)' :
+                               paramKey === 'co2' ? 'CO₂ (ppm)' : 'NO₂ (ppb)'}
+                            </h4>
+                            <div style={{ height: '160px' }}>
+                              <Line 
+                                data={getChartData(paramKey)} 
+                                options={{ 
+                                  responsive: true, 
+                                  maintainAspectRatio: false,
+                                  plugins: { legend: { display: false } },
+                                  scales: { 
+                                    y: { beginAtZero: true, ticks: { font: { size: 10 } } },
+                                    x: { ticks: { font: { size: 10 } } }
+                                  } 
+                                }} 
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {filteredReadings.length === 0 && (
+                        <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px', color: '#d32f2f', fontWeight: 'bold' }}>
+                          No data available to graph for this time range.
                         </div>
                       )}
                     </div>
                   )}
+
                 </div>
               )}
             </div>
