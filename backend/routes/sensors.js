@@ -35,7 +35,24 @@ router.post('/', async (req, res) => {
     res.status(400).json({ error: 'Error creating sensor' });
   }
 });
+// backend/routes/sensors.js
 
+// POST (Add) a new sensor
+router.post('/', async (req, res) => {
+  try {
+    // 1. Destructure ALL fields, including hardwareId
+    const { name, type, hardwareId, latitude, longitude } = req.body; 
+    
+    // 2. Create the new sensor
+    const newSensor = new Sensor({ name, type, hardwareId, latitude, longitude });
+    const savedSensor = await newSensor.save();
+    res.status(201).json(savedSensor);
+  } catch (err) {
+    console.error("❌ Error creating sensor:", err.message);
+    // 3. Send the REAL error message back to the frontend
+    res.status(400).json({ error: err.message }); 
+  }
+});
 // PUT (Update) an existing sensor
 router.put('/:id', async (req, res) => {
   try {

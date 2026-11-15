@@ -8,31 +8,27 @@ dotenv.config();
 
 const createAdmin = async () => {
   try {
+    // Connect to the CLOUD database
     await mongoose.connect(process.env.MONGO_URI);
-    
-    const email = 'admin@riversense.gov.ph';
-    const plainPassword = 'password123'; // You can change this later
-    
-    // Check if admin already exists
-    const existing = await Admin.findOne({ email });
-    if (existing) {
-      console.log('Admin already exists!');
-      process.exit();
-    }
+    console.log("✅ Connected to DB:", mongoose.connection.name); 
 
-    // Hash password
+    const email = 'admin@riversense.gov.ph'; // Use the exact email you are typing in the login form
+    const plainPassword = 'password123'; // Use the exact password you are typing
+
+    // Delete existing to start fresh
+    await Admin.deleteMany({ email }); 
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(plainPassword, salt);
 
-    const newAdmin = new Admin({ email, password: hashedPassword });
-    await newAdmin.save();
+    await Admin.create({ email, password: hashedPassword });
 
-    console.log('Admin created successfully!');
+    console.log(`\n✅ Admin created in database: ${mongoose.connection.name}`);
     console.log(`Email: ${email}`);
-    console.log(`Password: ${plainPassword}`);
+    console.log(`Password: ${plainPassword}\n`);
     process.exit();
   } catch (err) {
-    console.error(err);
+    console.error("❌ Error:", err);
     process.exit(1);
   }
 };

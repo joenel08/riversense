@@ -111,7 +111,9 @@ const AdminDashboard = () => {
       setEditingId(null);
       fetchData();
     } catch (err) {
-      alert('Error saving sensor');
+      // Show the actual error from Render
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Error saving sensor';
+      alert("Failed to save sensor: " + errorMsg);
     }
   };
 
