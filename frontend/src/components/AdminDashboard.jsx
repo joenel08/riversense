@@ -69,6 +69,10 @@ const AdminDashboard = () => {
   const doColors = generateGradientColors('#ffff00', '#00ff00', 10);
   const turbidityColors = generateGradientColors('#ff0000', '#0000ff', 10);
   const tempColors = generateGradientColors('#0000ff', '#ff0000', 5);
+  
+  // --- ADDED TDS & EC COLORS ---
+  const tdsColors = generateGradientColors('#00ff00', '#ff0000', 10); 
+  const ecColors = generateGradientColors('#00ff00', '#ff0000', 10);
 
   const paramConfig = {
     co2: { label: 'CO₂', color: '#9b59b6', unit: 'ppm' },
@@ -111,7 +115,6 @@ const AdminDashboard = () => {
       setEditingId(null);
       fetchData();
     } catch (err) {
-      // Show the actual error from Render
       const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Error saving sensor';
       alert("Failed to save sensor: " + errorMsg);
     }
@@ -191,9 +194,10 @@ const AdminDashboard = () => {
     return (sum / filteredReadings.length);
   };
 
+  // --- UNIVERSAL PARAMETERS (ACCEPTS EITHER WATER OR AIR OR MULTIPARAMETER) ---
   const getParameters = () => {
-    if (!viewingSensor) return [];
-    return viewingSensor.type === 'water' ? ['ph', 'turbidity', 'oxygen', 'temperature'] : ['co2', 'no2'];
+    // Return all possible parameters. If a sensor doesn't send one, it will display '--'.
+    return ['ph', 'turbidity', 'oxygen', 'temperature', 'tds', 'ec', 'co2', 'no2'];
   };
 
   // --- EXPORT CSV FUNCTION ---
@@ -221,9 +225,9 @@ const AdminDashboard = () => {
 
   // --- SCALE BAR RENDERERS ---
   const renderScaleBar = (value, min, max, steps, colors, unit, label) => {
-    let displayValue = value !== null ? value.toFixed(1) : '--';
+    let displayValue = value !== null && value !== undefined ? value.toFixed(1) : '--';
     let activeIndex = 0;
-    if (value !== null) {
+    if (value !== null && value !== undefined) {
       let clamped = Math.max(min, Math.min(max, value));
       let stepSize = (max - min) / steps;
       activeIndex = Math.round((clamped - min) / stepSize);
@@ -251,9 +255,9 @@ const AdminDashboard = () => {
   };
 
   const renderPHScale = (value) => {
-    let displayValue = value !== null ? value.toFixed(1) : '--';
+    let displayValue = value !== null && value !== undefined ? value.toFixed(1) : '--';
     let activeIndex = 0;
-    if (value !== null) activeIndex = Math.max(0, Math.min(14, Math.round(value)));
+    if (value !== null && value !== undefined) activeIndex = Math.max(0, Math.min(14, Math.round(value)));
 
     return (
       <div style={{ width: '100%', marginTop: '8px', position: 'relative' }}>
@@ -273,10 +277,17 @@ const AdminDashboard = () => {
   };
 
   const renderParameterVisual = (paramKey, value) => {
+    // If value is undefined/null, skip it entirely so we don't render empty bars
+    if (value === null || value === undefined) return null; 
+
     if (paramKey === 'ph') return renderPHScale(value);
     if (paramKey === 'oxygen') return renderScaleBar(value, 0, 10, 10, doColors, 'mg/L', 'Dissolved Oxygen');
     if (paramKey === 'turbidity') return renderScaleBar(value, 0, 500, 10, turbidityColors, 'NTU', 'Turbidity');
     if (paramKey === 'temperature') return renderScaleBar(value, 0, 25, 5, tempColors, '°C', 'Temperature');
+    
+    // --- ADDED TDS & EC RENDERERS ---
+    if (paramKey === 'tds') return renderScaleBar(value, 0, 1000, 10, tdsColors, 'ppm', 'Total Dissolved Solids');
+    if (paramKey === 'ec') return renderScaleBar(value, 0, 2000, 10, ecColors, 'µS/cm', 'Electrical Conductivity');
 
     const config = paramConfig[paramKey];
     if (!config) return null;
@@ -388,7 +399,7 @@ const AdminDashboard = () => {
             borderRadius: '8px', 
             border: '1px solid #e0e0e0', 
             height: 'fit-content',
-            boxSizing: 'border-box' // <--- CRITICAL FIX: Prevents padding from breaking the width
+            boxSizing: 'border-box' 
           }}>
             <h2 style={{ fontSize: '16px', margin: '0 0 20px 0', color: '#333', borderBottom: '2px solid #eee', paddingBottom: '10px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               {editingId ? <Edit2 size={18} color="#0056b3" /> : <PlusCircle size={18} color="#0056b3" />}
@@ -410,6 +421,7 @@ const AdminDashboard = () => {
                 <select value={formData.type} onChange={e => setFormData({ ...formData, type: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ccc', boxSizing: 'border-box', background: 'white' }}>
                   <option value="water">Water Quality Monitoring</option>
                   <option value="air">Air Quality Monitoring</option>
+                  <option value="multiparameter">Multiparameter (Water & Air)</option>
                 </select>
               </div>
 
@@ -445,7 +457,7 @@ const AdminDashboard = () => {
             border: '1px solid #e0e0e0', 
             overflow: 'hidden', 
             minWidth: 0,
-            boxSizing: 'border-box' // <--- CRITICAL FIX
+            boxSizing: 'border-box' 
           }}>
             
             {/* Table Header & Filters */}
@@ -463,6 +475,7 @@ const AdminDashboard = () => {
                   <option value="all">All Types</option>
                   <option value="water">Water Only</option>
                   <option value="air">Air Only</option>
+                  <option value="multiparameter">Multiparameter</option>
                 </select>
               </div>
             </div>
@@ -489,15 +502,18 @@ const AdminDashboard = () => {
                           <div style={{ fontSize: '11px', color: '#777' }}>Lat: {s.latitude}, Lng: {s.longitude}</div>
                         </td>
                         <td style={{ padding: '12px' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', background: s.type === 'water' ? '#e3f2fd' : '#f3e5f5', color: s.type === 'water' ? '#0056b3' : '#7b1fa2' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', background: s.type === 'water' ? '#e3f2fd' : s.type === 'air' ? '#f3e5f5' : '#fff3e0', color: s.type === 'water' ? '#0056b3' : s.type === 'air' ? '#7b1fa2' : '#f57c00' }}>
                             {s.type === 'water' ? <Droplets size={12} /> : <Wind size={12} />} {s.type.toUpperCase()}
                           </span>
                         </td>
                         <td style={{ padding: '12px', color: '#444', fontSize: '12px' }}>
                           {r ? (
-                            s.type === 'water' ? <div>pH: <b>{r.ph}</b><br/>Turb: <b>{r.turbidity}</b><br/>Temp: <b>{r.temperature}</b></div> :
-                              <div>CO₂: <b>{r.co2}</b><br/>NO₂: <b>{r.no2}</b></div>
-                          ) : <span style={{ color: '#aaa', fontStyle: 'italic' }}>Awaiting data...</span>}
+                            <div>
+                              <div>pH: <b>{r.ph || '--'}</b> | Turb: <b>{r.turbidity || '--'}</b> | Temp: <b>{r.temperature || '--'}</b></div>
+                              <div>TDS: <b>{r.tds || '--'}</b> | EC: <b>{r.ec || '--'}</b></div>
+                              <div>CO₂: <b>{r.co2 || '--'}</b> | NO₂: <b>{r.no2 || '--'}</b></div>
+                            </div>
+                          ) : <span style={{ color: '#aaa', fontStyle: 'italic' }}>Awaiting telemetry...</span>}
                         </td>
                         <td style={{ padding: '12px' }}>{getAlertBadge(r)}</td>
                         <td className="no-print" style={{ padding: '12px', textAlign: 'center', display: 'flex', justifyContent: 'center', gap: '8px' }}>

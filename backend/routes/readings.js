@@ -20,6 +20,8 @@ router.post('/ingest', async (req, res) => {
       ph: ph,
       turbidity: turbidity,
       temperature: temperature,
+      tds: tds, 
+      ec: ec,  
       // Note: Your Arduino code doesn't send Oxygen yet, but you can add it later
       co2: co2, 
       no2: no2,

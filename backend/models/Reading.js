@@ -7,6 +7,8 @@ const ReadingSchema = new mongoose.Schema({
   turbidity: Number,
   oxygen: Number,
   temperature: Number,
+   tds: Number, // <-- ADDED
+  ec: Number, 
   // air parameters
   co2: Number,
   no2: Number,

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react'; // ADDED useRef
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
@@ -40,7 +40,7 @@ const SensorDetail = () => {
   const [openAccordion, setOpenAccordion] = useState('1 Hour');
   
   // --- MAP REF & SEARCH STATE ---
-  const mapRef = useRef(null); // REPLACED state with useRef for React Leaflet v4+
+  const mapRef = useRef(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
 
@@ -76,18 +76,22 @@ const SensorDetail = () => {
   const doColors = generateGradientColors('#ffff00', '#00ff00', 10);
   const turbidityColors = generateGradientColors('#ff0000', '#0000ff', 10);
   const tempColors = generateGradientColors('#0000ff', '#ff0000', 5);
+  
+  // --- ADDED TDS & EC COLORS ---
+  const tdsColors = generateGradientColors('#00ff00', '#ff0000', 10); 
+  const ecColors = generateGradientColors('#00ff00', '#ff0000', 10);
 
   const paramConfig = {
     co2: { label: 'CO₂', color: '#9b59b6', unit: 'ppm' },
     no2: { label: 'NO₂', color: '#e84393', unit: 'ppb' },
   };
 
-  // --- API FETCH ---
-    // Replace your current API Fetch useEffect with this:
+  // --- API FETCH (WITH SILENT REFRESH) ---
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchData = async (isInitial = false) => {
       try {
-        setLoading(true); // Only show loading on first load
+        if (isInitial) setLoading(true); 
+        
         const cleanSensorId = sensorId.trim();
 
         const sensorRes = await API.get(`/sensors/${cleanSensorId}`);
@@ -98,22 +102,22 @@ const SensorDetail = () => {
       } catch (err) {
         console.error('Error fetching sensor data:', err);
       } finally {
-        setLoading(false);
+        if (isInitial) setLoading(false); 
       }
     };
     
-    fetchData(); // Initial fetch
+    fetchData(true); // Initial fetch
     
     // Silent refresh every 10 seconds
-    const interval = setInterval(fetchData, 10000); 
+    const interval = setInterval(() => fetchData(false), 10000); 
     
     return () => clearInterval(interval);
   }, [sensorId]);
-  // --- IMPROVED SEARCH LOCATION FUNCTION ---
+
+  // --- SEARCH LOCATION FUNCTION ---
   const handleSearch = async () => {
     if (!searchQuery.trim()) return alert("Please enter a location.");
     
-    // Access the map via mapRef.current
     const map = mapRef.current;
     if (!map) return alert("Map is still loading, please wait a moment.");
     
@@ -123,18 +127,14 @@ const SensorDetail = () => {
     try {
       const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`);
       
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`API Error: ${response.status}`);
 
       const data = await response.json();
       console.log("Search Results:", data);
 
       if (data && data.length > 0) {
         const { lat, lon } = data[0];
-        map.flyTo([parseFloat(lat), parseFloat(lon)], 15, {
-          duration: 2
-        });
+        map.flyTo([parseFloat(lat), parseFloat(lon)], 15, { duration: 2 });
       } else {
         alert("Location not found. Please try a different search (e.g. 'Manila' or 'Tuguegarao').");
       }
@@ -159,13 +159,18 @@ const SensorDetail = () => {
 
   const getAverageValue = (paramKey) => {
     if (filteredReadings.length === 0) return null;
+    
+    // Check if at least one reading actually has this parameter
+    const hasParam = filteredReadings.some(r => r[paramKey] !== undefined && r[paramKey] !== null);
+    if (!hasParam) return null;
+    
     const sum = filteredReadings.reduce((acc, curr) => acc + (curr[paramKey] || 0), 0);
     return (sum / filteredReadings.length);
   };
 
+  // --- UNIVERSAL PARAMETERS (ACCEPTS WATER, AIR, OR MULTIPARAMETER) ---
   const getParameters = () => {
-    if (!sensor) return [];
-    return sensor.type === 'water' ? ['ph', 'turbidity', 'oxygen', 'temperature'] : ['co2', 'no2'];
+    return ['ph', 'turbidity', 'oxygen', 'temperature', 'tds', 'ec', 'co2', 'no2'];
   };
 
   const toggleAccordion = (title) => {
@@ -174,9 +179,9 @@ const SensorDetail = () => {
 
   // --- SCALE BAR RENDERERS ---
   const renderScaleBar = (value, min, max, steps, colors, unit, label) => {
-    let displayValue = value !== null ? value.toFixed(1) : '--';
+    let displayValue = value !== null && value !== undefined ? value.toFixed(1) : '--';
     let activeIndex = 0;
-    if (value !== null) {
+    if (value !== null && value !== undefined) {
       let clamped = Math.max(min, Math.min(max, value));
       let stepSize = (max - min) / steps;
       activeIndex = Math.round((clamped - min) / stepSize);
@@ -230,9 +235,9 @@ const SensorDetail = () => {
   };
 
   const renderPHScale = (value) => {
-    let displayValue = value !== null ? value.toFixed(1) : '--';
+    let displayValue = value !== null && value !== undefined ? value.toFixed(1) : '--';
     let activeIndex = 0;
-    if (value !== null) {
+    if (value !== null && value !== undefined) {
       activeIndex = Math.max(0, Math.min(14, Math.round(value)));
     }
 
@@ -280,14 +285,22 @@ const SensorDetail = () => {
   };
 
   const renderParameterVisual = (paramKey, value) => {
+    // If value is null/undefined, skip rendering entirely to keep the UI clean
+    if (value === null || value === undefined) return null; 
+
     if (paramKey === 'ph') return renderPHScale(value);
     if (paramKey === 'oxygen') return renderScaleBar(value, 0, 10, 10, doColors, 'mg/L', 'Dissolved Oxygen');
     if (paramKey === 'turbidity') return renderScaleBar(value, 0, 500, 10, turbidityColors, 'NTU', 'Turbidity');
     if (paramKey === 'temperature') return renderScaleBar(value, 0, 25, 5, tempColors, '°C', 'Temperature');
+    
+    // --- ADDED TDS & EC RENDERERS ---
+    if (paramKey === 'tds') return renderScaleBar(value, 0, 1000, 10, tdsColors, 'ppm', 'Total Dissolved Solids');
+    if (paramKey === 'ec') return renderScaleBar(value, 0, 2000, 10, ecColors, 'µS/cm', 'Electrical Conductivity');
 
     const config = paramConfig[paramKey];
     if (!config) return null;
-    let displayValue = value !== null ? value.toFixed(1) : '--';
+    
+    let displayValue = value.toFixed(1);
     return (
       <div style={{
         background: 'white',
@@ -358,11 +371,10 @@ const SensorDetail = () => {
           center={[sensor.latitude, sensor.longitude]}
           zoom={14}
           style={{ height: '100%', width: '100%' }}
-          ref={mapRef} // <--- USING REF INSTEAD OF whenCreated
+          ref={mapRef}
         >
           <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
           
-          {/* --- THE PIN (MARKER) --- */}
           <Marker position={[sensor.latitude, sensor.longitude]}>
             <Popup>
               <strong>{sensor.name}</strong><br/>
